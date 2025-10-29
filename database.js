@@ -8,16 +8,18 @@ fs.ensureDirSync(dbDir);
 
 const dbPath = path.join(dbDir, 'filestore.db');
 
-// Create database connection
-const db = new sqlite3.Database(dbPath, async (err) => {
+// Create database connection with better error handling
+const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, async (err) => {
   if (err) {
     console.error('Error opening database:', err);
+    process.exit(1);
   } else {
     console.log('Connected to SQLite database');
     try {
       await initializeTables();
     } catch (error) {
       console.error('Error initializing tables:', error);
+      process.exit(1);
     }
   }
 });
