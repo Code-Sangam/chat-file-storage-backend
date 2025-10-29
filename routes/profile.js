@@ -3,17 +3,10 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs-extra');
 const { v4: uuidv4 } = require('uuid');
-const db = require('../database');
+const db = require('../database-simple');
 
-// Try to load Sharp, but make it optional
-let sharp;
-try {
-  sharp = require('sharp');
-  console.log('Sharp loaded successfully for image optimization');
-} catch (error) {
-  console.warn('Sharp not available - images will be stored without optimization:', error.message);
-  sharp = null;
-}
+// No image processing - store files as-is for maximum compatibility
+console.log('Image processing disabled for maximum compatibility on all platforms');
 
 const router = express.Router();
 
@@ -50,29 +43,12 @@ router.post('/upload-picture', upload.single('profilePicture'), async (req, res)
 
     // Generate unique filename
     const fileId = uuidv4();
-    const fileExtension = sharp ? '.webp' : path.extname(req.file.originalname) || '.jpg';
+    const fileExtension = path.extname(req.file.originalname) || '.jpg';
     const fileName = `profile_${userId}_${fileId}${fileExtension}`;
     const filePath = path.join(__dirname, '../uploads/profiles', fileName);
     
-    // Process image (with Sharp if available, otherwise save as-is)
-    if (sharp) {
-      try {
-        await sharp(req.file.buffer)
-          .resize(400, 400, { 
-            fit: 'cover',
-            position: 'center'
-          })
-          .webp({ quality: 85 })
-          .toFile(filePath);
-      } catch (sharpError) {
-        console.warn('Sharp processing failed, saving original:', sharpError.message);
-        // Fallback to saving original file
-        await fs.writeFile(filePath, req.file.buffer);
-      }
-    } else {
-      // No Sharp available, save original file
-      await fs.writeFile(filePath, req.file.buffer);
-    }
+    // Save original file (no processing for maximum compatibility)
+    await fs.writeFile(filePath, req.file.buffer);
 
     // Get file stats
     const stats = await fs.stat(filePath);

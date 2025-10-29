@@ -53,7 +53,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Initialize database
-const db = require('./database');
+const db = require('./database-simple');
 
 // Routes
 app.use('/api/profile', uploadLimiter, require('./routes/profile'));

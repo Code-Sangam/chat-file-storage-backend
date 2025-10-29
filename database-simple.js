@@ -8,7 +8,7 @@ fs.ensureDirSync(dbDir);
 
 const dbPath = path.join(dbDir, 'filestore.db');
 
-// Create database connection with better-sqlite3 (more reliable)
+// Create database connection
 let db;
 try {
   db = new Database(dbPath);
@@ -19,10 +19,10 @@ try {
   process.exit(1);
 }
 
-// Initialize database tables (synchronous with better-sqlite3)
+// Initialize database tables
 function initializeTables() {
   try {
-    // Users table for profile pictures
+    // Users table
     db.exec(`
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,11 +57,10 @@ function initializeTables() {
       )
     `);
 
-    // Create indexes for better performance
+    // Create indexes
     db.exec(`CREATE INDEX IF NOT EXISTS idx_users_user_id ON users(user_id)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_files_user_id ON shared_files(user_id)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_files_file_id ON shared_files(file_id)`);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_files_created_at ON shared_files(created_at DESC)`);
 
     console.log('Database tables initialized successfully');
   } catch (error) {
@@ -70,9 +69,9 @@ function initializeTables() {
   }
 }
 
-// Helper functions
+// Database helper functions
 const dbHelpers = {
-  // Get user by Firebase user ID
+  // Get user
   getUser: (userId) => {
     try {
       const stmt = db.prepare('SELECT * FROM users WHERE user_id = ?');
@@ -87,13 +86,11 @@ const dbHelpers = {
   upsertUser: (userData) => {
     try {
       const { userId, username, email, profilePicturePath, profilePictureUrl } = userData;
-      
       const stmt = db.prepare(`
         INSERT OR REPLACE INTO users 
         (user_id, username, email, profile_picture_path, profile_picture_url, updated_at)
         VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       `);
-      
       const result = stmt.run(userId, username, email, profilePicturePath, profilePictureUrl);
       return { id: result.lastInsertRowid, userId };
     } catch (error) {
@@ -102,100 +99,100 @@ const dbHelpers = {
     }
   },
 
-  // Create shared file record
+  // Create shared file
   createSharedFile: (fileData) => {
-    return new Promise((resolve, reject) => {
-      const {
-        fileId, userId, originalName, fileName, filePath, fileUrl,
-        fileSize, mimeType, description, category
-      } = fileData;
-
-      db.run(`
+    try {
+      const { fileId, userId, originalName, fileName, filePath, fileUrl, fileSize, mimeType, description, category } = fileData;
+      const stmt = db.prepare(`
         INSERT INTO shared_files 
-        (file_id, user_id, original_name, file_name, file_path, file_url, 
-         file_size, mime_type, description, category)
+        (file_id, user_id, original_name, file_name, file_path, file_url, file_size, mime_type, description, category)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [fileId, userId, originalName, fileName, filePath, fileUrl, 
-          fileSize, mimeType, description, category], function(err) {
-        if (err) reject(err);
-        else resolve({ id: this.lastID, fileId });
-      });
-    });
+      `);
+      const result = stmt.run(fileId, userId, originalName, fileName, filePath, fileUrl, fileSize, mimeType, description, category);
+      return { id: result.lastInsertRowid, fileId };
+    } catch (error) {
+      console.error('Error creating shared file:', error);
+      throw error;
+    }
   },
 
-  // Get shared file by ID
+  // Get shared file
   getSharedFile: (fileId) => {
-    return new Promise((resolve, reject) => {
-      db.get('SELECT * FROM shared_files WHERE file_id = ?', [fileId], (err, row) => {
-        if (err) reject(err);
-        else resolve(row);
-      });
-    });
+    try {
+      const stmt = db.prepare('SELECT * FROM shared_files WHERE file_id = ?');
+      return stmt.get(fileId);
+    } catch (error) {
+      console.error('Error getting shared file:', error);
+      return null;
+    }
   },
 
   // Get user's shared files
   getUserSharedFiles: (userId, limit = 50, offset = 0) => {
-    return new Promise((resolve, reject) => {
-      db.all(`
+    try {
+      const stmt = db.prepare(`
         SELECT * FROM shared_files 
         WHERE user_id = ? 
         ORDER BY created_at DESC 
         LIMIT ? OFFSET ?
-      `, [userId, limit, offset], (err, rows) => {
-        if (err) reject(err);
-        else resolve(rows);
-      });
-    });
+      `);
+      return stmt.all(userId, limit, offset);
+    } catch (error) {
+      console.error('Error getting user shared files:', error);
+      return [];
+    }
   },
 
   // Delete shared file
   deleteSharedFile: (fileId, userId) => {
-    return new Promise((resolve, reject) => {
-      db.run(`
-        DELETE FROM shared_files 
-        WHERE file_id = ? AND user_id = ?
-      `, [fileId, userId], function(err) {
-        if (err) reject(err);
-        else resolve({ changes: this.changes });
-      });
-    });
+    try {
+      const stmt = db.prepare('DELETE FROM shared_files WHERE file_id = ? AND user_id = ?');
+      const result = stmt.run(fileId, userId);
+      return { changes: result.changes };
+    } catch (error) {
+      console.error('Error deleting shared file:', error);
+      throw error;
+    }
   },
 
   // Update download count
   incrementDownloadCount: (fileId) => {
-    return new Promise((resolve, reject) => {
-      db.run(`
+    try {
+      const stmt = db.prepare(`
         UPDATE shared_files 
         SET download_count = download_count + 1, last_accessed = CURRENT_TIMESTAMP
         WHERE file_id = ?
-      `, [fileId], function(err) {
-        if (err) reject(err);
-        else resolve({ changes: this.changes });
-      });
-    });
+      `);
+      const result = stmt.run(fileId);
+      return { changes: result.changes };
+    } catch (error) {
+      console.error('Error incrementing download count:', error);
+      throw error;
+    }
   },
 
-  // Get file statistics for user
+  // Get file statistics
   getUserFileStats: (userId) => {
-    return new Promise((resolve, reject) => {
-      db.get(`
+    try {
+      const stmt = db.prepare(`
         SELECT 
           COUNT(*) as total_files,
           SUM(file_size) as total_size,
           SUM(download_count) as total_downloads
         FROM shared_files 
         WHERE user_id = ?
-      `, [userId], (err, row) => {
-        if (err) reject(err);
-        else resolve(row);
-      });
-    });
+      `);
+      return stmt.get(userId);
+    } catch (error) {
+      console.error('Error getting file stats:', error);
+      return { total_files: 0, total_size: 0, total_downloads: 0 };
+    }
   },
 
   // Search files
   searchFiles: (userId, searchTerm) => {
-    return new Promise((resolve, reject) => {
-      db.all(`
+    try {
+      const stmt = db.prepare(`
         SELECT * FROM shared_files 
         WHERE user_id = ? AND (
           original_name LIKE ? OR 
@@ -204,11 +201,13 @@ const dbHelpers = {
         )
         ORDER BY created_at DESC
         LIMIT 20
-      `, [userId, `%${searchTerm}%`, `%${searchTerm}%`, `%${searchTerm}%`], (err, rows) => {
-        if (err) reject(err);
-        else resolve(rows);
-      });
-    });
+      `);
+      const term = `%${searchTerm}%`;
+      return stmt.all(userId, term, term, term);
+    } catch (error) {
+      console.error('Error searching files:', error);
+      return [];
+    }
   }
 };
 

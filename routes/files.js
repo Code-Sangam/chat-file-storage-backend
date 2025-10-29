@@ -3,7 +3,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs-extra');
 const { v4: uuidv4 } = require('uuid');
-const db = require('../database');
+const db = require('../database-simple');
 
 const router = express.Router();
 
